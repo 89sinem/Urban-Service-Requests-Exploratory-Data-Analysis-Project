@@ -1,0 +1,626 @@
+---
+title: "Project 1"
+output:
+  html_document:
+    df_print: paged
+---
+
+STEP 1: SET DIRECTORY
+```{r}
+setwd("/Users/atakemma/Emma/BU_MET/BLOG ARTICLE/AD699 Data Mining for Business Analytics/Modules/Projects/Project_1")
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 2: LIBRARIES
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(naniar)
+library(dplyr)
+library(lubridate)
+library(leaflet)
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 3: LOAD DATA
+```{r}
+calls <- read.csv("allservicecalls.csv")
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 4. EXPLORING THE DATASET
+
+a. Call the str() function
+```{r}
+str(calls)
+```
+The str() function displays the number of observations (rows) as 603,236 and number of variables (columns) is 17. For each variable it tells us the data type (character as chr and integer as int), and it also gives the first few values for that column.
+
+
+b. Functions to get the number of rows and columsn
+```{r}
+# number of rows
+print(sprintf("The number of rows in calls is: %d", nrow(calls)))
+# number of columns
+print(sprintf("The number of columns in calls is: %d", ncol(calls)))
+
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 5. MISSING VALUES and COMPLETE CASES
+-------------------------------------------------------------------------------------------------------
+                    TIP:  R treated empty spaces as non-missing values.
+-------------------------------------------------------------------------------------------------------
+
+*Checking the Total Number of Empty Strings
+```{r}
+# Function to count empty strings in each column of a data frame
+count_empty_strings <- function(df) {
+  sapply(df, function(column) sum(column == "", na.rm = TRUE))
+}
+
+# Count empty strings in each column
+empty_string_counts <- count_empty_strings(calls)
+print("Empty string counts in each column:")
+print(empty_string_counts)
+
+# Sum of empty strings across all columns
+total_empty_strings <- sum(empty_string_counts)
+print(paste("Total empty strings in the data frame:", total_empty_strings))
+```
+
+*Checking the Total Number of Nas
+```{r}
+# Function to count NA values in each column of a data frame
+count_na_values <- function(df) {
+  sapply(df, function(column) sum(is.na(column)))
+}
+
+# Count NA values in each column
+na_value_counts <- count_na_values(calls)
+print("NA value counts in each column:")
+print(na_value_counts)
+
+# Sum of NA values across all columns
+total_na_values <- sum(na_value_counts)
+print(paste("Total NA values in the data frame:", total_na_values))
+```
+
+-------------------------------------------------------------------------------------------------------
+                                      VERIFYING THE TIP
+-------------------------------------------------------------------------------------------------------
+
+a. Count the number of missing values in the entire data set using the n_miss function
+```{r}
+
+n_miss(calls)
+```
+There are 20 missing values in the entire data set.
+
+b. Find the percentage of the rows in the dataframe are complete cases.
+```{r}
+pct_complete_case(calls)
+```
+99.99834% of the rows in this data set are complete cases. A complete case is a row of the data that is entirely complete. That means every element in the row has value even though there is a blank cell.
+
+c. Convert empty cells to NA
+```{r}
+calls[calls==""] <- NA
+
+```
+d. We have 60,865 missing values in the data set.
+```{r}
+n_miss(calls)
+```
+
+e.
+```{r}
+pct_complete_case(calls)
+```
+There are 89.92351% rows that are complete cases. The reason this is now lower than the 99.99834% we saw earlier is because originally R treated blank spaces as non-missing values. Now we've converted all the blanks to missing values, so these rows that were originally complete cases are now not complete cases anymore.
+
+f. Verifying: Number of missing values and percentage of missing values for each column (default= descending order.)
+```{r}
+# Get the summary of missing values for each variable
+missing_summary <- miss_var_summary(calls)
+
+# Calculate the total number of missing values
+total_missing_values <- sum(missing_summary$n_miss)
+
+# Print the summary of missing values
+print("Summary of missing values for each variable:")
+print(missing_summary)
+
+# Print the total number of missing values
+print(paste("Total number of missing values:", total_missing_values))
+```
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 6. CONVERTING OPENEDDATETIME and CLOSEDDATETIME to DATE OBJECT
+
+a. Checking Data Type for OPENEDDATETIME and CLOSEDDATETIME
+```{r}
+str(calls$OPENEDDATETIME)
+str(calls$CLOSEDDATETIME)
+```
+R treats both of these columns as character type variables, not dates.
+
+b. Convert the character type dates into actual dates
+```{r}
+calls$OPENEDDATETIME <- as.Date(calls$OPENEDDATETIME, format = "%m/%d/%y")
+calls$CLOSEDDATETIME <- as.Date(calls$CLOSEDDATETIME, format = "%m/%d/%y")
+head(calls$OPENEDDATETIME)
+head(calls$CLOSEDDATETIME)
+```
+The dates have been converted to the format YYYY-MM-DD, which is the default date format in R.
+
+c. Verifying Data Type for OPENEDDATETIME and CLOSEDDATETIME
+```{r}
+str(calls$OPENEDDATETIME)
+str(calls$CLOSEDDATETIME)
+```
+The str() function now shows that the data type for both variables is Date.
+
+////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 7: INVESTIGATING EACH COLUMN
+
+a. Frequency of the District Column
+```{r}
+# Create a frequency table of the 'Council.District' column
+council_district_table <- table(calls$Council.District)
+
+# Print the frequency table
+print("Frequency table of Council.District:")
+print(council_district_table)
+
+# Add a blank line for readability
+cat("\n")
+
+# Sort the frequency table in decreasing order
+sorted_council_district_table <- sort(council_district_table, decreasing = TRUE)
+
+# Print the sorted frequency table
+print("Sorted frequency table of Council.District (in decreasing order):")
+print(sorted_council_district_table)
+
+```
+
+b. Choosing one of the districts to use feature analysis.
+```{r}
+district5 <- filter(calls, Council.District==5)
+nrow(district5)
+```
+Selected district 5 because it has the most calls and maybe there is a reason for that.
+
+
+c. Checking the CaseStatus=="Open"
+```{r}
+calls_open <- filter(calls, CaseStatus=="Open")
+nrow(calls_open)
+```
+The number of missing values in the CLOSEDDATETIME column is 60,625 (from missing value summary answer) which is the same count as the number of observations that have an Open Case Status. All the observations that have a missing CLOSEDDATETIME value are considered an Open Case Status. 
+
+
+d. Create a duration variable which is the difference between the Closed Date and the Open Date
+```{r}
+calls$duration <- calls$CLOSEDDATETIME-calls$OPENEDDATETIME
+head(calls$duration, n = 20)
+```
+I've calculated the duration in dates which is the difference between the closed date and open date. The duration is missing (NA) if the closed date is also missing.
+
+
+e. Filter data on a specific date for future analysis. (maybe your birthday!)
+```{r}
+calls_birthday <- filter(calls, month(calls$OPENEDDATETIME) == 11 & day(calls$OPENEDDATETIME) == 30)
+nrow(calls_birthday)
+```
+There are 1,996 case requests on November 30th in the entire data set.
+
+f. Find unique categories in calls_birthday
+```{r}
+# Create a frequency table of the 'Category' column in the calls_birthday data frame
+category_table_birthday <- table(calls_birthday$Category)
+
+# Sort the frequency table in decreasing order
+sorted_category_table_birthday <- sort(category_table_birthday, decreasing = TRUE)
+
+# Print the sorted frequency table
+print("Sorted frequency table of Category in calls_birthday (in decreasing order):")
+print(sorted_category_table_birthday)
+```
+Solid Waste Services is the most common category that occurs on November 30.
+
+g. Explore the Council District variable
+```{r}
+table(calls$Council.District)
+```
+The district should be treated as a categorical variable, not a quantitative variable. The meaning of the number is only for labeling purposes.
+
+h. Convert the Council District into a character
+```{r}
+# Converting to chr
+calls$Council.District <- as.character(calls$Council.District)
+
+# Verifying the Data Type
+str(calls$Council.District)
+```
+The character type will ensure that this variable is treated as a categorical variable in any analysis done.
+
+i. Frequency of the SourceID
+```{r}
+# Create a frequency table of the 'SourceID' column
+source_id_table <- table(calls$SourceID)
+
+# Calculate the proportions and convert them to percentages
+source_id_percentages <- prop.table(source_id_table) * 100
+
+# Sort the percentages in descending order
+sorted_source_id_percentages <- sort(source_id_percentages, decreasing = TRUE)
+
+# Print the sorted percentages
+print("Sorted Source ID Percentages:")
+print(sorted_source_id_percentages)
+
+```
+The least is the 311 Mobile App at 6.18%.
+
+j.Frequency of the Category
+```{r}
+# Calculate the frequency of each category
+categorycount <- table(calls$Category)
+
+# Sort the category counts in descending order
+sorted_categorycount <- sort(categorycount, decreasing = TRUE)
+
+# Display the top categories and their counts
+cat("Frequency of the Category:\n")
+print(sorted_categorycount)
+
+```
+The highest category is Solid Waste Service.
+
+k. Filter the 6 most frequent categories in the data
+```{r}
+# Get the names of the top 6 most frequent categories
+top_categories <- names(sorted_categorycount[1:6])
+
+# Filter the calls data frame to include only the top 6 categories
+calls_category <- subset(calls, Category %in% top_categories)
+
+# Calculate the number of rows in the filtered data frame
+total_top_count <- nrow(calls_category)
+
+# Calculate the total count of the top 6 categories directly from the table
+sum_top_counts <- sum(sorted_categorycount[1:6])
+
+# Calculate the total count of all categories
+total_all_count <- sum(categorycount)
+
+# Calculate the percentage of the top 6 categories relative to the total count
+total_percentage <- (total_top_count / total_all_count) * 100
+
+# Create a data frame for the filtered categories and their counts
+filtered_category_counts <- table(calls_category$Category)
+filtered_categories_df <- data.frame(Category = names(filtered_category_counts), Count = as.vector(filtered_category_counts))
+
+# Display the results
+cat("Number of rows in calls_category (total count of top 6 categories):", total_top_count, "\n")
+cat("Sum of counts for top 6 categories from categorycount:", sum_top_counts, "\n")
+cat("Percentage of total categories:", sprintf("%.2f", total_percentage), "%\n")
+cat("Filtered top 6 categories and their counts:\n")
+print(filtered_categories_df)
+```
+There are 588,338 observations (97.53%) that have the 6 most common categories.
+
+l. Find the percent of observations that have the Graffiti category.
+```{r}
+# Create a frequency table of the 'Category' column
+category_table <- table(calls$Category)
+
+# Calculate the proportions and convert them to percentages
+category_percentages <- prop.table(category_table) * 100
+
+# Sort the percentages in descending order
+sorted_category_percentages <- sort(category_percentages, decreasing = TRUE)
+
+# Print the sorted percentages with a description
+print("Sorted Category Percentages:")
+print(sorted_category_percentages)
+
+# Add a blank line for readability
+cat("\n")
+
+# Print the percentage for the 'Graffiti' category
+graffiti_percentage <- sorted_category_percentages["Graffiti"]
+print(paste("Percentage of 'Graffiti' category:", round(graffiti_percentage, 3), "%"))
+
+```
+0.081% of the observations have the Graffiti category. This information is found in the Category variable.
+
+m. Frequency of the REASONNAME 
+```{r}
+# Create a frequency table of the 'REASONNAME' column
+reasonname_table <- table(calls$REASONNAME)
+
+# Sort the frequencies in descending order
+sorted_reasonname_table <- sort(reasonname_table, decreasing = TRUE)
+
+# Print the sorted unique REASONNAME values and their counts
+print("Sorted Unique REASONNAME values and their counts:")
+print(sorted_reasonname_table)
+
+# Add a blank line for readability
+cat("\n")
+
+# Calculate the total number of unique values in the 'REASONNAME' column
+num_unique_reasonnames <- length(sorted_reasonname_table)
+
+# Print the total number of unique values
+print(paste("Total number of unique REASONNAME values:", num_unique_reasonnames))
+```
+There are 25 unique values in the REASONNAME column
+
+n. Filter on these 6 most frequent reason names in the data.
+```{r}
+# Calculate the frequency of each reason and sort them in decreasing order
+reasoncount <- sort(table(calls$REASONNAME), decreasing = TRUE)
+
+# Extract the names and counts of the top 6 reasons
+top_reasons_with_counts <- reasoncount[1:6]
+
+# Get the names of the top 6 most frequent reasons
+top_reasons <- names(top_reasons_with_counts)
+
+# Filter the calls data frame to include only rows with REASONNAME in the top 6 most frequent
+calls_reason <- subset(calls, REASONNAME %in% top_reasons)
+
+# Calculate the number of rows in the filtered data frame
+num_rows <- nrow(calls_reason)
+
+# Calculate the total count of the top 6 reasons directly from the table
+sum_top_counts <- sum(top_reasons_with_counts)
+
+# Calculate the total count of all reasons
+total_all_count <- sum(reasoncount)
+
+# Calculate the percentage of the top 6 reasons relative to the total count
+total_percentage <- (num_rows / total_all_count) * 100
+
+# Create a data frame for the filtered reasons and their counts
+filtered_reason_counts <- table(calls_reason$REASONNAME)
+filtered_reasons_df <- data.frame(REASONNAME = names(filtered_reason_counts), Count = as.vector(filtered_reason_counts))
+
+# Display the results
+cat("Number of rows in calls_reason (total count of top 6 reasons):", num_rows, "\n")
+cat("Sum of counts for top 6 reasons from reasoncount:", sum_top_counts, "\n")
+cat("Percentage of total reasons:", sprintf("%.2f", total_percentage), "%\n")
+cat("Filtered top 6 reasons and their counts:\n")
+print(filtered_reasons_df)
+```
+There are 562,450 observations (93.24%) that have the 6 most common reasons.
+
+
+o. Frequency of the TYPENAME
+```{r}
+# Create a frequency table of the 'TYPENAME' column
+typecount_table <- table(calls$TYPENAME)
+
+# Sort the frequencies in descending order
+sorted_typecount_table <- sort(typecount_table, decreasing = TRUE)
+
+# Print the sorted unique REASONNAME values and their counts
+print("Sorted Unique TYPENAME values and their counts:")
+print(sorted_typecount_table)
+
+# Add a blank line for readability
+cat("\n")
+
+# Calculate the total number of unique values in the 'REASONNAME' column
+num_unique_typename <- length(sorted_typecount_table)
+
+# Print the total number of unique values
+print(paste("Total number of unique TYPENAME values:", num_unique_typename))
+```
+
+
+p. Filter on these 6 most frequent type names in the data
+```{r}
+# Calculate the frequency of each type and sort them in decreasing order
+typecount <- sort(table(calls$TYPENAME), decreasing = TRUE)
+
+# Extract the names and counts of the top 6 types
+top_types_with_counts <- typecount[1:6]
+
+# Get the names of the top 6 most frequent types
+top_types <- names(top_types_with_counts)
+
+# Filter the calls data frame to include only rows with TYPENAME in the top 6 most frequent
+calls_type <- subset(calls, TYPENAME %in% top_types)
+
+# Calculate the number of rows in the filtered data frame
+num_rows <- nrow(calls_type)
+
+# Calculate the total count of the top 6 types directly from the table
+sum_top_counts <- sum(top_types_with_counts)
+
+# Calculate the total count of all types
+total_all_count <- sum(typecount)
+
+# Calculate the percentage of the top 6 types relative to the total count
+total_percentage <- (num_rows / total_all_count) * 100
+
+# Create a data frame for the filtered types and their counts
+filtered_type_counts <- table(calls_type$TYPENAME)
+filtered_types_df <- data.frame(TYPENAME = names(filtered_type_counts), Count = as.vector(filtered_type_counts))
+
+# Display the results
+cat("Number of rows in calls_type (total count of top 6 types):", num_rows, "\n")
+cat("Sum of counts for top 6 types from typecount:", sum_top_counts, "\n")
+cat("Percentage of total types:", sprintf("%.2f", total_percentage), "%\n")
+cat("Filtered top 6 types and their counts:\n")
+print(filtered_types_df)
+```
+There are 243,037 observations (40.29%) that have the 6 most common type names.
+
+q. Checking the CASEID unique identifier
+```{r}
+# Calculate the number of unique CASEID values
+num_unique_caseid <- length(unique(calls$CASEID))
+
+# Calculate the total number of rows in the data frame
+total_rows <- nrow(calls)
+
+# Check if CASEID is a unique identifier
+if (num_unique_caseid == total_rows) {
+  print("CASEID is a unique identifier. Removing it from the data frame.")
+  
+  # Number of columns before deletion
+  print(paste("Number of columns before deletion:", ncol(calls)))
+  
+  # Remove the CASEID column using mutate
+  calls <- mutate(calls, CASEID = NULL)
+  
+  # Number of columns after deletion
+  print(paste("Number of columns after deletion:", ncol(calls)))
+} else {
+  print("CASEID is not a unique identifier. It will not be removed.")
+}
+
+```
+CASEID column represent the unique identifier. We cannot include it in our analysis. So, I removed it.
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 8: CREATE NEW COLUMNS
+
+a. Create a column called "season"
+```{r}
+calls$season <- quarter(calls$OPENEDDATETIME) #creating season column based on the open date.
+
+#rename 
+calls <- mutate(calls, season = case_when(
+  season==1 ~ "Winter",
+  season==2 ~ "Spring",
+  season==3 ~ "Summer",
+  season==4 ~ "Fall"
+))
+head(calls$season, n=20)
+```
+Season that is either "Winter, Spring, Summer, or Fall" (quarterly starting from W, S, S, F) depending on when the OPENEDDATE occurred during the year.
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+STEP 9: VISUALIZATION
+
+a. Barplot of the number of calls in each season
+```{r}
+ggplot(data = calls, aes(x=season, fill = season)) + geom_bar()
+```
+In this barplot, the seasons are shown in alphabetical order, not chronological order. R always shows categorical plots/charts where the categories are listed in alphabetical order by default. 
+
+b. Ordered the season variable in the order Winter, Spring, Summer, Fall
+```{r}
+calls$season <- factor(calls$season, levels = c("Winter","Spring","Summer","Fall"))
+ggplot(data = calls, aes(x=season, fill = season)) + geom_bar() +
+  labs(title = "Counts of Service Requests by Season") +
+  xlab("Season") + ylab("Frequency") +
+  scale_fill_manual(values=c("blue","green","yellow","red"))
+```
+
+Now the seasons are in order from Winter, Spring, Summer, and Fall. We also changed the colors for each bar. There are more requests that occur in the first two quarters of the year compared to the last two quarters.
+
+c. Plot of the frequency of calls in each category, order in decreasing order by frequency.
+```{r}
+calls_category$Category <- factor(calls_category$Category, levels = names(sorted_categorycount))
+ggplot(data = calls_category, aes(x=Category, fill = Category)) + geom_bar() +
+  labs(title = "Counts of Service Requests For the Top 6 Categories") +
+  xlab("Category") + ylab("Frequency") +
+  scale_fill_manual(values=c("blue","green","yellow","red", "black", "orange")) + scale_x_discrete(guide = guide_axis(n.dodge=3))
+```
+
+Solid Waste Services and Property Management make up the majority of service requests of the top 6, with Animals, Streets and Infrastructure, Traffic Signals and Signs, and Parks not as frequent as the first two categories.
+
+
+d. Plot for Counts of Service Requests by Source for the Top 6 Reason Names
+```{r}
+ggplot(data = calls_reason, aes(x=SourceID, fill = SourceID)) + geom_bar() + facet_wrap(~REASONNAME) + 
+  labs(title = "Counts of Service Requests by Source for the Top 6 Reason Names") +
+  xlab("Source") + ylab("Frequency") +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+The distribution of SourceID counts is very different across each Reason Name. For the Code Enforcement, the Code Proactive Calls is the highest frequency, while for the other 5 reason names, the Constituent Call is the highest frequency by SourceID. Code Proactive Calls only occurs for the Code Enforcement Reason Name.
+
+e. Histogram of the duration variable, make sure to remove the missing values.
+```{r}
+ggplot(data = filter(calls, !is.na(duration)), aes(x = as.numeric(duration))) +
+  geom_histogram(color = "blue", bins = 50) + labs(title = "Histogram of Service Duration in Days") +
+  xlab("Duration in Days") + ylab("Frequency")
+```
+The majority of service requests are completed within 40 days. (2000 days/50 bins)
+
+f. Service requests completed within 1 year.
+```{r}
+ggplot(data = filter(calls, !is.na(duration) & duration < 366 & duration >= 0), aes(x = as.numeric(duration))) +
+  geom_histogram(color = "blue", bins = 50) + labs(title = "Histogram of Service Duration in Days for Service Requests completed within 1 year") +
+  xlab("Duration in Days") + ylab("Frequency")
+```
+Majority of service requests are completed within 7 days. (365 days/50 bins) This distribution of duration is also heavily skewed to the right.
+
+g. Histogram of the duration variable, with REASONNAME as the fill
+```{r}
+ggplot(data = filter(calls_reason, !is.na(duration)), aes(x = as.numeric(duration), fill = REASONNAME)) +
+  geom_histogram(bins = 50) + labs(title = "Histogram of Service Duration in Days split by Reason Name") +
+  xlab("Duration in Days") + ylab("Frequency")
+```
+The bar plot tells us the distribution of the Reason name for each bar on this histogram. (Looks like the service request are taking longer duration are more from the Code Enforcement Reason Name. Waste Collection takes less time.)
+
+h. Histogram of Service Duration in Days for Service Requests completed within 1 year
+```{r}
+ggplot(data = filter(calls_reason, !is.na(duration) & duration < 366 & duration >= 0), aes(x = as.numeric(duration), fill = REASONNAME)) +
+  geom_histogram(bins = 25) + labs(title = "Histogram of Service Duration in Days for Service Requests completed within 1 year split by Reason Name") +
+  xlab("Duration in Days") + ylab("Frequency")
+```
+
+The service requests that are completed very quickly (within 14 days) (365 days/25 bins ) are coming from the Waste Collection Reason Name. Then, service requests that take a longer duration are more often due to the Code Enforcement Reason Name.
+
+
+i. Bar plot of the frequency for each Category, split by the Type Name
+```{r}
+calls_type$Category <- factor(calls_type$Category, levels = names(sorted_categorycount[1:6]))
+ggplot(data = calls_type, aes(x=Category, fill = TYPENAME)) + geom_bar() +
+  labs(title = "Counts of Service Requests by Category, split by Type") +
+  xlab("Category") + ylab("Frequency") + scale_x_discrete(guide = guide_axis(n.dodge=2))
+```
+Each category has different types of services. Solid Waste Services is made up of the Carts, Dead Animal Pickup, and No Pick types. Property Maintenance is made up entirely of Overgrown Yard/Trash, and Animals Category is made up of Aggressive Animals and Stray Animals types.
+
+
+STEP 10. Latitude and Longitude from https://latitudelongitude.org/us/san-antonio/
+Latitude = 29.42412, Longitude = -98.49363
+```{r}
+m <- leaflet() %>% addTiles() %>% addCircles(lng= -98.49363, lat= 29.42412)
+m # Print the map
+```
+
+
+```{r}
+m <- leaflet() %>% addTiles() %>% addCircles(lng= -98.49363, lat= 29.42412) %>% addProviderTiles(providers$OpenTopoMap)
+m # Print the map
+
+```
+
+
+
+```{r}
+m <- leaflet() %>% addTiles() %>% addCircles(lng= -98.49363, lat= 29.42412) %>% addProviderTiles(providers$OpenRailwayMap)
+m # Print the map
+
+```
